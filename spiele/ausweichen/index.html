@@ -1,0 +1,333 @@
+<!doctype html>
+<!--
+  AUSWEICHEN
+  ==========
+  So funktioniert das Spiel:
+  1. Unten fliegt deine Rakete 🚀. Von oben fallen Meteoriten 🪨.
+  2. Steuern: Pfeiltasten (oder A/D) am Mac, Finger oder Maus ziehen am Handy.
+  3. Für jeden Meteoriten, dem du ausweichst, gibt es 1 Punkt.
+  4. Mit der Zeit wird es schneller. Eine Berührung = Game Over.
+
+  Die drei wichtigsten Ideen in diesem Code:
+  - SPIELSCHLEIFE: Die Funktion schleife() läuft ca. 60-mal pro Sekunde.
+    Jedes Mal wird alles bewegt (aktualisieren) und neu gemalt (zeichnen).
+  - BEWEGUNG: Position = Position + Geschwindigkeit × vergangene Zeit.
+  - KOLLISION: Wir tun so, als wären Rakete und Meteorit Kreise. Sind die
+    Mittelpunkte näher beieinander als beide Radien zusammen, berühren sie sich.
+-->
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ausweichen – MACS Spiele</title>
+  <style>
+    :root { --bg: #f6f4ef; --text: #1f2328; --accent: #2f7d5b; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #16181c; --text: #e8e6e1; --accent: #5fc193; }
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; padding: 12px 16px;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      /* Verhindert, dass das Handy beim Ziehen die Seite verschiebt oder markiert */
+      user-select: none; -webkit-user-select: none; overscroll-behavior: none;
+    }
+    header { width: 100%; max-width: 400px; display: flex; justify-content: space-between; align-items: center; }
+    header a { color: var(--accent); text-decoration: none; }
+    h1 { margin: 0; font-size: 1.3rem; }
+    /* Die Zeichenfläche. Sie wird so groß wie möglich, behält aber das Seitenverhältnis 2:3 */
+    canvas {
+      display: block;
+      width: min(100%, 400px, calc((100vh - 110px) * 2 / 3));
+      aspect-ratio: 2 / 3;
+      border-radius: 16px;
+      touch-action: none; /* Finger-Bewegungen gehören dem Spiel, nicht dem Scrollen */
+      cursor: pointer;
+    }
+    small { opacity: .7; text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="../../">← Start</a>
+    <h1>🚀 Ausweichen</h1>
+    <span></span>
+  </header>
+  <canvas id="spielfeld"></canvas>
+  <small>Pfeiltasten oder Finger/Maus ziehen · Leertaste oder Tippen startet</small>
+
+  <script>
+    // ---------------------------------------------------------------
+    // 1. VORBEREITUNG: Zeichenfläche holen und Größe festlegen
+    // ---------------------------------------------------------------
+    const canvas = document.getElementById('spielfeld');
+    const stift = canvas.getContext('2d'); // der "Stift", mit dem wir malen
+
+    // Das Spiel rechnet immer in einer festen Größe von 400 × 600 Punkten.
+    // So ist es auf jedem Bildschirm gleich schwer.
+    const BREITE = 400;
+    const HOEHE = 600;
+
+    // Auf Retina-Bildschirmen (Mac, iPhone) malen wir mit mehr Pixeln, damit es scharf ist.
+    const pixelFaktor = window.devicePixelRatio || 1;
+    canvas.width = BREITE * pixelFaktor;
+    canvas.height = HOEHE * pixelFaktor;
+    stift.scale(pixelFaktor, pixelFaktor);
+
+    // ---------------------------------------------------------------
+    // 2. SPIELZUSTAND: alles, was sich das Spiel merken muss
+    // ---------------------------------------------------------------
+    const spieler = {
+      x: BREITE / 2,   // Mitte waagerecht
+      y: HOEHE - 60,   // weit unten
+      radius: 18,      // Größe für die Kollision
+      tempo: 320       // Punkte pro Sekunde beim Steuern mit Tasten
+    };
+
+    let meteoriten = [];      // Liste aller fallenden Hindernisse
+    let sterne = [];          // Hintergrund-Sterne, nur zur Deko
+    let punkte = 0;
+    let bestwert = ladeBestwert();
+    let zustand = 'start';    // 'start', 'spiel' oder 'vorbei'
+    let spielzeit = 0;        // Sekunden seit Spielbeginn
+    let naechsterMeteorIn = 0; // Countdown bis zum nächsten Meteoriten
+    let neuerRekord = false;
+
+    // Welche Tasten gerade gedrückt sind
+    const tasten = { links: false, rechts: false };
+    // Wohin der Finger/die Maus zeigt (null = gerade nicht)
+    let zielX = null;
+
+    // Deko-Sterne einmal zufällig verteilen
+    for (let i = 0; i < 50; i++) {
+      sterne.push({ x: Math.random() * BREITE, y: Math.random() * HOEHE, groesse: Math.random() * 2 + 0.5 });
+    }
+
+    // ---------------------------------------------------------------
+    // 3. BESTWERT im Browser speichern (localStorage)
+    // ---------------------------------------------------------------
+    function ladeBestwert() {
+      try { return Number(localStorage.getItem('ausweichen-bestwert')) || 0; }
+      catch (e) { return 0; } // z. B. im privaten Modus nicht erlaubt
+    }
+    function speichereBestwert(wert) {
+      try { localStorage.setItem('ausweichen-bestwert', String(wert)); } catch (e) {}
+    }
+
+    // ---------------------------------------------------------------
+    // 4. STEUERUNG: Tastatur, Maus und Finger
+    // ---------------------------------------------------------------
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a') tasten.links = true;
+      if (e.key === 'ArrowRight' || e.key === 'd') tasten.rechts = true;
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); starteWennMoeglich(); }
+      if (e.key.startsWith('Arrow')) e.preventDefault(); // Seite soll nicht scrollen
+      zielX = null; // Tastatur hat jetzt Vorrang
+    });
+    document.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a') tasten.links = false;
+      if (e.key === 'ArrowRight' || e.key === 'd') tasten.rechts = false;
+    });
+
+    // "Pointer" fasst Maus, Finger und Stift zusammen – ein Code für alles.
+    // Die Bildschirm-Position wird in Spielfeld-Punkte (0 bis 400) umgerechnet.
+    function fingerZuSpielX(e) {
+      const rahmen = canvas.getBoundingClientRect();
+      return (e.clientX - rahmen.left) / rahmen.width * BREITE;
+    }
+    canvas.addEventListener('pointerdown', (e) => {
+      canvas.setPointerCapture(e.pointerId); // Finger bleibt "dran", auch außerhalb
+      if (starteWennMoeglich()) return;
+      zielX = fingerZuSpielX(e);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      // Maus: einfach bewegen reicht. Finger: nur solange er den Bildschirm berührt.
+      if (e.pointerType === 'mouse' || e.buttons > 0) zielX = fingerZuSpielX(e);
+    });
+
+    // Startet ein neues Spiel, wenn gerade keins läuft. Gibt true zurück, wenn gestartet.
+    let vorbeiSeit = 0;
+    function starteWennMoeglich() {
+      if (zustand === 'spiel') return false;
+      // Kleine Pause nach Game Over, damit man nicht aus Versehen sofort neu startet
+      if (zustand === 'vorbei' && performance.now() - vorbeiSeit < 600) return true;
+      meteoriten = [];
+      punkte = 0;
+      spielzeit = 0;
+      naechsterMeteorIn = 0.5;
+      neuerRekord = false;
+      spieler.x = BREITE / 2;
+      zustand = 'spiel';
+      return true;
+    }
+
+    // ---------------------------------------------------------------
+    // 5. AKTUALISIEREN: alles ein kleines Stück weiterbewegen
+    //    dt = vergangene Zeit seit dem letzten Bild, in Sekunden (ca. 0,016)
+    // ---------------------------------------------------------------
+    function aktualisieren(dt) {
+      // Sterne fallen langsam – das sieht aus, als würde die Rakete fliegen
+      for (const s of sterne) {
+        s.y += s.groesse * 30 * dt;
+        if (s.y > HOEHE) { s.y = 0; s.x = Math.random() * BREITE; }
+      }
+      if (zustand !== 'spiel') return;
+
+      spielzeit += dt;
+
+      // --- Spieler bewegen ---
+      if (tasten.links) spieler.x -= spieler.tempo * dt;
+      if (tasten.rechts) spieler.x += spieler.tempo * dt;
+      if (zielX !== null) {
+        // Sanft zum Finger gleiten statt springen (jedes Bild ein Stück näher ran)
+        spieler.x += (zielX - spieler.x) * Math.min(1, 15 * dt);
+      }
+      // Nicht aus dem Bild fliegen
+      spieler.x = Math.max(spieler.radius, Math.min(BREITE - spieler.radius, spieler.x));
+
+      // --- Schwierigkeit: wird mit der Zeit größer ---
+      const fallTempo = 180 + spielzeit * 12;              // Punkte pro Sekunde
+      const abstand = Math.max(0.25, 0.9 - spielzeit * 0.02); // Sekunden zwischen Meteoriten
+
+      // --- Neue Meteoriten erzeugen ---
+      naechsterMeteorIn -= dt;
+      if (naechsterMeteorIn <= 0) {
+        const radius = 14 + Math.random() * 14; // unterschiedlich groß
+        meteoriten.push({
+          x: radius + Math.random() * (BREITE - 2 * radius),
+          y: -radius,
+          radius: radius,
+          tempo: fallTempo * (0.8 + Math.random() * 0.4), // jeder etwas anders schnell
+          drehung: Math.random() * Math.PI * 2
+        });
+        naechsterMeteorIn = abstand;
+      }
+
+      // --- Meteoriten bewegen, Kollision prüfen, Punkte zählen ---
+      for (const m of meteoriten) {
+        m.y += m.tempo * dt;   // BEWEGUNG: Position + Tempo × Zeit
+        m.drehung += dt * 2;
+
+        // KOLLISION: Abstand der Mittelpunkte (Satz des Pythagoras)
+        const dx = m.x - spieler.x;
+        const dy = m.y - spieler.y;
+        const abstandMitte = Math.sqrt(dx * dx + dy * dy);
+        // 0.8 = etwas großzügig, damit knappe Ausweicher nicht unfair wirken
+        if (abstandMitte < (m.radius + spieler.radius) * 0.8) {
+          spielVorbei();
+          return;
+        }
+      }
+      // Meteoriten, die unten raus sind, entfernen und dafür Punkte geben
+      const vorher = meteoriten.length;
+      meteoriten = meteoriten.filter(m => m.y - m.radius < HOEHE);
+      punkte += vorher - meteoriten.length;
+    }
+
+    function spielVorbei() {
+      zustand = 'vorbei';
+      vorbeiSeit = performance.now();
+      if (punkte > bestwert) {
+        bestwert = punkte;
+        neuerRekord = true;
+        speichereBestwert(bestwert);
+      }
+      if (navigator.vibrate) navigator.vibrate(150); // kurzes Rütteln auf Android
+    }
+
+    // ---------------------------------------------------------------
+    // 6. ZEICHNEN: das ganze Bild neu malen
+    // ---------------------------------------------------------------
+    function zeichnen() {
+      // Hintergrund: dunkler Weltraum mit Farbverlauf
+      const verlauf = stift.createLinearGradient(0, 0, 0, HOEHE);
+      verlauf.addColorStop(0, '#0b1026');
+      verlauf.addColorStop(1, '#2a1b4a');
+      stift.fillStyle = verlauf;
+      stift.fillRect(0, 0, BREITE, HOEHE);
+
+      // Sterne
+      stift.fillStyle = 'rgba(255,255,255,0.7)';
+      for (const s of sterne) stift.fillRect(s.x, s.y, s.groesse, s.groesse);
+
+      // Emojis werden wie Text gemalt, mittig auf ihre Position
+      stift.textAlign = 'center';
+      stift.textBaseline = 'middle';
+
+      // Meteoriten (gedreht, damit sie "taumeln")
+      for (const m of meteoriten) {
+        stift.save();
+        stift.translate(m.x, m.y);
+        stift.rotate(m.drehung);
+        stift.font = (m.radius * 2.2) + 'px sans-serif';
+        stift.fillText('🪨', 0, 0);
+        stift.restore();
+      }
+
+      // Rakete (ein Emoji ist schräg, darum drehen wir es um 45° nach oben)
+      if (zustand !== 'start') {
+        stift.save();
+        stift.translate(spieler.x, spieler.y);
+        stift.rotate(-Math.PI / 4);
+        stift.font = '40px sans-serif';
+        stift.fillText(zustand === 'vorbei' ? '💥' : '🚀', 0, 0);
+        stift.restore();
+      }
+
+      // Punktestand oben
+      stift.fillStyle = '#fff';
+      stift.font = 'bold 22px system-ui, sans-serif';
+      stift.textAlign = 'left';
+      stift.fillText('Punkte: ' + punkte, 16, 26);
+      stift.textAlign = 'right';
+      stift.font = '16px system-ui, sans-serif';
+      stift.fillText('Bestwert: ' + bestwert, BREITE - 16, 26);
+
+      // Texte für Start und Game Over
+      stift.textAlign = 'center';
+      if (zustand === 'start') {
+        mittelText('🚀', 70, HOEHE / 2 - 90);
+        mittelText('Ausweichen', 'bold 38px system-ui, sans-serif', HOEHE / 2 - 10);
+        mittelText('Weiche den Meteoriten aus!', '18px system-ui, sans-serif', HOEHE / 2 + 30);
+        mittelText('Tippen oder Leertaste zum Starten', 'bold 18px system-ui, sans-serif', HOEHE / 2 + 80, '#5fc193');
+      }
+      if (zustand === 'vorbei') {
+        stift.fillStyle = 'rgba(0,0,0,0.55)';
+        stift.fillRect(0, HOEHE / 2 - 110, BREITE, 210);
+        mittelText('Game Over', 'bold 40px system-ui, sans-serif', HOEHE / 2 - 60);
+        mittelText(punkte + ' Punkte', 'bold 28px system-ui, sans-serif', HOEHE / 2 - 10);
+        mittelText(neuerRekord ? '🏆 Neuer Bestwert!' : 'Bestwert: ' + bestwert, '18px system-ui, sans-serif', HOEHE / 2 + 28, neuerRekord ? '#ffd54f' : '#fff');
+        mittelText('Tippen oder Leertaste für neues Spiel', 'bold 17px system-ui, sans-serif', HOEHE / 2 + 68, '#5fc193');
+      }
+    }
+
+    // Hilfsfunktion: Text waagerecht mittig malen
+    function mittelText(text, schrift, y, farbe) {
+      stift.font = typeof schrift === 'number' ? schrift + 'px sans-serif' : schrift;
+      stift.fillStyle = farbe || '#fff';
+      stift.fillText(text, BREITE / 2, y);
+    }
+
+    // ---------------------------------------------------------------
+    // 7. DIE SPIELSCHLEIFE – das Herz jedes Action-Spiels
+    //    requestAnimationFrame ruft schleife() vor jedem neuen Bildschirmbild auf
+    //    (meist 60-mal pro Sekunde) und gibt uns die aktuelle Zeit mit.
+    // ---------------------------------------------------------------
+    let letzteZeit = performance.now();
+    function schleife(jetzt) {
+      // Vergangene Zeit in Sekunden. Höchstens 0,05, falls der Tab im Hintergrund war.
+      const dt = Math.min(0.05, (jetzt - letzteZeit) / 1000);
+      letzteZeit = jetzt;
+
+      aktualisieren(dt);
+      zeichnen();
+
+      requestAnimationFrame(schleife); // und gleich wieder von vorn
+    }
+    requestAnimationFrame(schleife);
+  </script>
+</body>
+</html>
