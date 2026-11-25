@@ -2,7 +2,7 @@
 
 Kleine Browser-Spiele und Web-Apps, gebaut beim Lernen mit Claude.
 
-Live: https://shiconsu.github.io/macs-spiele/
+Live: https://shiconsu.github.io/Macs-spiele/
 
 ## Aufbau
 
