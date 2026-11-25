@@ -18,6 +18,8 @@
              color:#fff; cursor:pointer; }
     #zaehler { font-size:2.5rem; font-weight:700; margin:16px 0; }
     small { opacity:.7; }
+    h2 { margin:28px 0 8px; font-size:1.2rem; }
+    a.spiel { display:inline-block; margin-top:4px; padding:12px 20px; border-radius:10px; background:var(--accent); color:#fff; text-decoration:none; font-weight:600; }
   </style>
 </head>
 <body>
@@ -27,7 +29,8 @@
     <p>Kleiner Test, ob JavaScript funktioniert:</p>
     <div id="zaehler">0</div>
     <button id="knopf">Klick mich</button>
-    <p><small>Hier kommen bald die ersten Spiele hin.</small></p>
+    <h2>Spiele</h2>
+    <p><a class="spiel" href="spiele/reaktionstest/">⚡ Reaktionstest</a><br><small>Wie schnell reagierst du, wenn es grün wird?</small></p>
   </main>
   <script>
     let klicks = 0;

@@ -1,0 +1,222 @@
+<!doctype html>
+<!--
+  REAKTIONSTEST
+  =============
+  So funktioniert das Spiel:
+  1. Du tippst auf die Fläche, um zu starten. Sie wird ROT ("Warte ...").
+  2. Nach einer zufälligen Zeit (1 bis 4 Sekunden) wird sie GRÜN.
+  3. Jetzt so schnell wie möglich tippen! Die Zeit wird in Millisekunden angezeigt.
+  4. Wer zu früh tippt (solange es noch rot ist), macht einen FEHLSTART.
+
+  Alles steckt in dieser einen Datei:
+  - HTML  = was auf der Seite steht (Überschrift, Fläche, Texte)
+  - CSS   = wie es aussieht (Farben, Größen) – im <style>-Bereich
+  - JavaScript = was passiert (Spiellogik) – im <script>-Bereich ganz unten
+-->
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <!-- Diese Zeile sorgt dafür, dass die Seite auf dem Handy richtig groß dargestellt wird -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reaktionstest – MACS Spiele</title>
+  <style>
+    /* Farben an einer Stelle festlegen, damit man sie leicht ändern kann */
+    :root {
+      --bg: #f6f4ef; --text: #1f2328; --card: #ffffff;
+      --blau: #2b6cb0;   /* Startbildschirm */
+      --rot: #c53030;    /* Warten */
+      --gruen: #2f9e5b;  /* JETZT tippen! */
+      --orange: #dd6b20; /* Fehlstart */
+    }
+    /* Dunkler Modus, wenn der Mac/das Handy dunkel eingestellt ist */
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #16181c; --text: #e8e6e1; --card: #22252b; }
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; padding: 16px;
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+      background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    header { width: 100%; max-width: 640px; display: flex; justify-content: space-between; align-items: center; }
+    header a { color: inherit; opacity: .7; }
+    h1 { margin: 0; font-size: 1.4rem; }
+
+    /* Die große Spielfläche */
+    #flaeche {
+      width: 100%; max-width: 640px; flex: 1; min-height: 320px; max-height: 520px;
+      border: 0; border-radius: 20px; color: #fff; cursor: pointer;
+      display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px;
+      font: inherit; text-align: center; padding: 24px;
+      background: var(--blau);
+      /* Verhindert auf dem Handy das kurze Aufblitzen und Doppeltipp-Zoom */
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+      user-select: none; -webkit-user-select: none;
+    }
+    /* Je nach Spielzustand bekommt die Fläche eine andere Farbe.
+       Das JavaScript setzt dafür einfach eine passende CSS-Klasse. */
+    #flaeche.warten   { background: var(--rot); }
+    #flaeche.jetzt    { background: var(--gruen); }
+    #flaeche.fehlstart{ background: var(--orange); }
+
+    #gross { font-size: clamp(2rem, 10vw, 4rem); font-weight: 800; }
+    #klein { font-size: 1.1rem; opacity: .9; }
+
+    /* Infozeile unten: Bestwert und letzte Versuche */
+    .info {
+      width: 100%; max-width: 640px; background: var(--card); border-radius: 16px; padding: 16px 20px;
+      display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; align-items: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,.08);
+    }
+    .info button { font: inherit; padding: 8px 14px; border-radius: 10px; border: 1px solid currentColor;
+                   background: transparent; color: inherit; cursor: pointer; opacity: .7; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⚡ Reaktionstest</h1>
+    <a href="../../">← Alle Spiele</a>
+  </header>
+
+  <!-- Die Spielfläche ist ein Knopf (button). So funktioniert sie mit Maus, Finger UND Tastatur. -->
+  <button id="flaeche" type="button">
+    <span id="gross">Tippen zum Starten</span>
+    <span id="klein">Warte, bis es grün wird – dann so schnell wie möglich tippen.</span>
+  </button>
+
+  <div class="info">
+    <span>🏆 Bestwert: <strong id="bestwert">–</strong></span>
+    <span>Letzte Versuche: <span id="verlauf">–</span></span>
+    <button id="zuruecksetzen" type="button">Bestwert löschen</button>
+  </div>
+
+  <script>
+    // ------------------------------------------------------------
+    // 1. Die wichtigsten Elemente der Seite "einsammeln",
+    //    damit wir sie später ändern können.
+    // ------------------------------------------------------------
+    const flaeche   = document.getElementById('flaeche');
+    const gross     = document.getElementById('gross');
+    const klein     = document.getElementById('klein');
+    const bestwertEl = document.getElementById('bestwert');
+    const verlaufEl = document.getElementById('verlauf');
+
+    // ------------------------------------------------------------
+    // 2. Der Spielzustand. Das Spiel ist immer in GENAU einem Zustand:
+    //    'start'     – blauer Bildschirm, wartet auf den ersten Tipp
+    //    'warten'    – rot, der Zufalls-Timer läuft
+    //    'jetzt'     – grün, die Zeit wird gemessen
+    //    'ergebnis'  – zeigt die gemessene Zeit
+    //    'fehlstart' – zu früh getippt
+    // ------------------------------------------------------------
+    let zustand = 'start';
+    let timer = null;        // merkt sich den Zufalls-Timer, damit wir ihn abbrechen können
+    let gruenSeit = 0;       // Zeitpunkt, an dem es grün wurde
+    let verlauf = [];        // die letzten Ergebnisse
+
+    // Der Bestwert wird im Browser gespeichert (localStorage).
+    // So bleibt er erhalten, auch wenn du die Seite schließt.
+    // Er liegt nur auf DEINEM Gerät, nicht im Internet.
+    const SPEICHER_NAME = 'macs-reaktionstest-bestwert';
+    let bestwert = Number(localStorage.getItem(SPEICHER_NAME)) || null;
+    zeigeBestwert();
+
+    // ------------------------------------------------------------
+    // 3. Hilfsfunktion: Fläche umfärben und Texte setzen
+    // ------------------------------------------------------------
+    function zeige(neuerZustand, grosserText, kleinerText) {
+      zustand = neuerZustand;
+      flaeche.className = neuerZustand; // CSS-Klasse = Farbe (siehe <style>)
+      gross.textContent = grosserText;
+      klein.textContent = kleinerText;
+    }
+
+    // ------------------------------------------------------------
+    // 4. Eine neue Runde starten: rot werden und Zufalls-Timer stellen
+    // ------------------------------------------------------------
+    function starteRunde() {
+      zeige('warten', 'Warte …', 'Noch nicht tippen!');
+
+      // Zufällige Wartezeit zwischen 1000 und 4000 Millisekunden.
+      // Math.random() liefert eine Zahl zwischen 0 und 1.
+      const wartezeit = 1000 + Math.random() * 3000;
+
+      // setTimeout führt die Funktion nach der Wartezeit EINMAL aus.
+      timer = setTimeout(function () {
+        zeige('jetzt', 'JETZT!', 'Tippen!');
+        // performance.now() ist eine sehr genaue Stoppuhr des Browsers
+        gruenSeit = performance.now();
+      }, wartezeit);
+    }
+
+    // ------------------------------------------------------------
+    // 5. Was passiert bei einem Tipp/Klick? Hängt vom Zustand ab.
+    // ------------------------------------------------------------
+    function tipp() {
+      if (zustand === 'start' || zustand === 'ergebnis' || zustand === 'fehlstart') {
+        // Neue Runde
+        starteRunde();
+
+      } else if (zustand === 'warten') {
+        // Zu früh! Timer abbrechen, damit es nicht doch noch grün wird.
+        clearTimeout(timer);
+        zeige('fehlstart', 'Fehlstart! 🙈', 'Zu früh getippt. Tippen für einen neuen Versuch.');
+
+      } else if (zustand === 'jetzt') {
+        // Treffer! Zeit seit dem Grünwerden ausrechnen und runden.
+        const zeit = Math.round(performance.now() - gruenSeit);
+        speichereErgebnis(zeit);
+
+        let lob = 'Tippen für die nächste Runde.';
+        if (zeit === bestwert) lob = '🏆 Neuer Bestwert! ' + lob;
+        zeige('ergebnis', zeit + ' ms', lob);
+      }
+    }
+
+    // ------------------------------------------------------------
+    // 6. Ergebnis merken: Verlauf (letzte 5) und Bestwert
+    // ------------------------------------------------------------
+    function speichereErgebnis(zeit) {
+      verlauf.unshift(zeit);          // vorne anfügen
+      verlauf = verlauf.slice(0, 5);  // nur die letzten 5 behalten
+      verlaufEl.textContent = verlauf.map(z => z + ' ms').join(' · ');
+
+      if (bestwert === null || zeit < bestwert) {
+        bestwert = zeit;
+        localStorage.setItem(SPEICHER_NAME, bestwert);
+        zeigeBestwert();
+      }
+    }
+
+    function zeigeBestwert() {
+      bestwertEl.textContent = bestwert ? bestwert + ' ms' : '–';
+    }
+
+    // ------------------------------------------------------------
+    // 7. Ereignisse verbinden ("Wenn X passiert, mache Y")
+    // ------------------------------------------------------------
+    // 'pointerdown' reagiert sofort beim Berühren/Drücken – schneller als 'click',
+    // das erst beim Loslassen kommt. Das macht die Messung fairer.
+    flaeche.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      tipp();
+    });
+
+    // Tastatur: Leertaste oder Enter funktionieren auch.
+    document.addEventListener('keydown', function (e) {
+      if ((e.code === 'Space' || e.code === 'Enter') && !e.repeat) {
+        e.preventDefault();
+        tipp();
+      }
+    });
+
+    document.getElementById('zuruecksetzen').addEventListener('click', function () {
+      localStorage.removeItem(SPEICHER_NAME);
+      bestwert = null;
+      zeigeBestwert();
+    });
+  </script>
+</body>
+</html>
