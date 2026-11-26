@@ -1,6 +1,8 @@
 # MACS Spiele – Hinweise für Claude
 
-Kleine Browser-Spiele und Web-Apps. Marcus lernt hier Programmieren mit Claude,
+Teil von MACS, dem Lern- und Bastelprojekt für Apps und Spiele.
+
+Kleine Browser-Spiele und Web-Apps. Hier wird Programmieren mit Claude gelernt,
 ohne Vorkenntnisse. Lernen steht im Vordergrund.
 
 ## Arbeitsweise
@@ -8,7 +10,7 @@ ohne Vorkenntnisse. Lernen steht im Vordergrund.
 - Antworten auf Deutsch, klar und knapp. Kurz erklären, was du tust und warum.
 - Klein starten: lieber schnell etwas Spielbares als ein großer Plan.
 - Größere Aufgaben erst im Plan-Modus planen, dann umsetzen.
-- Jede Änderung auf einem eigenen Branch, dann Pull Request. Gemergt wird nur nach Marcus' OK.
+- Jede Änderung auf einem eigenen Branch, dann Pull Request. Gemergt wird nur nach OK des Inhabers.
 - Keine neuen Kosten (Abos, Dienste, API-Schlüssel) ohne Freigabe. Rahmen: ca. 50 € pro Monat.
 - Keine fremden Erweiterungen (Skills, Plugins, MCP-Server) installieren. Vorschlagen ist erlaubt,
   geprüft und eingetragen wird in `docs/erweiterungen.md`.
@@ -36,11 +38,11 @@ Live über GitHub Pages: https://shiconsu.github.io/Macs-spiele/ (Branch `main`,
 
 1. **Läuft:** Seite lädt ohne Fehler in der Browser-Konsole. (Später automatisch per Playwright.)
 2. **Review:** `reviewer` hat nichts Ernstes gefunden, oder die Funde sind behoben.
-3. **Freigabe:** Marcus hat es gespielt und den PR gemergt.
+3. **Freigabe:** Der Inhaber hat es gespielt und den PR gemergt.
 
 ## Privatsphäre
 
-Marcus bleibt anonym: keine privaten Namen oder E-Mail-Adressen in Code, Commits oder Texten.
+Der Inhaber bleibt anonym: keine privaten Namen oder E-Mail-Adressen in Code, Commits oder Texten.
 
 ## Ausbau
 

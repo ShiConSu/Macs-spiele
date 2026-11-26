@@ -1,6 +1,6 @@
-# Ausbau-Roadmap: vom Mini-Setup zum vollen Entwicklungs-Setup
+# MACS-Ausbau-Roadmap: vom Mini-Setup zum vollen Entwicklungs-Setup
 
-Stand: 26.11.2026. Grundlage ist die Prüfung des „Development OS“-Konzepts.
+Stand: 26.11.2026. Grundlage ist die Prüfung des MACS-Ausbaukonzepts.
 
 Das Setup startet klein und wächst nur, wenn ein echtes Projekt zeigt, dass etwas fehlt.
 Jede Stufe hat einen **Auslöser** (wann sie sich lohnt) und einen **Andockpunkt** (wo sie technisch hingehört).
@@ -11,7 +11,7 @@ Die Rollen und Gates aus dem großen Konzept gehen nicht verloren, sie kommen sp
 - `CLAUDE.md` mit Regeln und Aufbau
 - Agent `reviewer` (nur lesen, Modell `opus`) in `.claude/agents/`
 - Berechtigungsregeln in `.claude/settings.json`
-- Drei Prüfstufen: läuft · Review · Marcus' Freigabe
+- Drei Prüfstufen: läuft · Review · Freigabe durch den Inhaber
 - Kosten: nur das bestehende Claude-Abo
 
 ## Stufe 2 – Automatisch prüfen
@@ -53,7 +53,7 @@ Die Rollen und Gates aus dem großen Konzept gehen nicht verloren, sie kommen sp
 
 ## Feste Regeln für jeden Ausbau
 
-- Sicherheitsregeln, Berechtigungen und Freigaberegeln ändert nur Marcus.
+- Sicherheitsregeln, Berechtigungen und Freigaberegeln ändert nur der Inhaber.
 - Neue Erweiterungen erst nach Prüfung und Eintrag in `docs/erweiterungen.md`.
 - Neue Kosten nur nach Freigabe.
 - Eine Stufe wird erst begonnen, wenn die vorige im Alltag funktioniert.

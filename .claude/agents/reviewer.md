@@ -20,6 +20,6 @@ Antworte auf Deutsch, so:
 
 - **Ernst** (muss vor dem Merge behoben werden): Datei:Zeile – Problem – Vorschlag
 - **Hinweis** (kann warten): Datei:Zeile – Problem – Vorschlag
-- **Fazit:** ein Satz, ob es bereit für Marcus' Freigabe ist.
+- **Fazit:** ein Satz, ob es bereit für die Freigabe durch den Inhaber ist.
 
 Wenn du nichts findest, sag das klar. Erfinde keine Probleme.
